@@ -8,6 +8,8 @@ node_modules/
 
 # SQLite database
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 

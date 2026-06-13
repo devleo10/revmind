@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "seed": "node seed.js",
+    "seed:force": "node seed.js --force"
   },
   "engines": {
     "node": ">=18"
