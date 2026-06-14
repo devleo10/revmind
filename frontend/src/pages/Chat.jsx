@@ -59,6 +59,8 @@ function Chat() {
     }
   }
 
+  const isEmpty = messages.length === 0 && !loading;
+
   return (
     <section className="chat-page">
       <header className="chat-page__header">
@@ -69,9 +71,9 @@ function Chat() {
         </p>
       </header>
 
-      <div className="chat-panel">
+      <div className="chat-panel glass-card">
         <div className="chat-messages" aria-live="polite">
-          {messages.length === 0 && !loading ? (
+          {isEmpty ? (
             <div className="chat-empty">
               <p className="chat-empty__title">Start a conversation</p>
               <p className="chat-empty__text">

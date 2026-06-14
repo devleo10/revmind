@@ -45,23 +45,23 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <section>
+      <section className="dashboard">
         <header className="dashboard__header">
           <h1>Dashboard</h1>
           <p className="page-lead">Loading NovaBite sales overview…</p>
         </header>
-        <div className="dashboard-state">Fetching KPIs from the API…</div>
+        <div className="dashboard-state glass-card">Fetching KPIs from the API…</div>
       </section>
     );
   }
 
   if (error) {
     return (
-      <section>
+      <section className="dashboard">
         <header className="dashboard__header">
           <h1>Dashboard</h1>
         </header>
-        <div className="dashboard-state dashboard-state--error" role="alert">
+        <div className="dashboard-state dashboard-state--error glass-card" role="alert">
           {error}
         </div>
       </section>
@@ -71,7 +71,7 @@ function Dashboard() {
   const maxRevenue = Math.max(...trends.map((row) => row.net_revenue), 1);
 
   return (
-    <section>
+    <section className="dashboard">
       <header className="dashboard__header">
         <h1>Dashboard</h1>
         <p className="page-lead">
@@ -80,19 +80,19 @@ function Dashboard() {
       </header>
 
       <div className="kpi-grid">
-        <article className="kpi-card">
+        <article className="kpi-card glass-card">
           <p className="kpi-card__label">Total net revenue</p>
           <p className="kpi-card__value">
             {formatCurrency(summary.total_net_revenue)}
           </p>
         </article>
-        <article className="kpi-card">
+        <article className="kpi-card glass-card">
           <p className="kpi-card__label">Units sold</p>
           <p className="kpi-card__value">
             {formatNumber(summary.total_units)}
           </p>
         </article>
-        <article className="kpi-card">
+        <article className="kpi-card glass-card">
           <p className="kpi-card__label">Gross profit margin</p>
           <p className="kpi-card__value">
             {formatPercent(summary.gross_profit_margin_pct)}
@@ -101,21 +101,21 @@ function Dashboard() {
       </div>
 
       <div className="highlight-grid">
-        <article className="highlight-card">
+        <article className="highlight-card glass-card">
           <p className="highlight-card__label">Top region</p>
           <p className="highlight-card__title">{summary.top_region.name}</p>
           <p className="highlight-card__meta">
             {formatCurrency(summary.top_region.net_revenue)} net revenue
           </p>
         </article>
-        <article className="highlight-card">
+        <article className="highlight-card glass-card">
           <p className="highlight-card__label">Top channel</p>
           <p className="highlight-card__title">{summary.top_channel.name}</p>
           <p className="highlight-card__meta">
             {formatCurrency(summary.top_channel.net_revenue)} net revenue
           </p>
         </article>
-        <article className="highlight-card">
+        <article className="highlight-card glass-card">
           <p className="highlight-card__label">Top product</p>
           <p className="highlight-card__title">
             {summary.top_product.product_name}
@@ -128,7 +128,7 @@ function Dashboard() {
       </div>
 
       {trends.length > 0 ? (
-        <article className="trends-card">
+        <article className="trends-card glass-card">
           <h2 className="trends-card__title">Monthly net revenue</h2>
           <div className="trends-list">
             {trends.map((row) => (
