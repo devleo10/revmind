@@ -5,6 +5,7 @@ const { seed } = require('../seed');
 const { getDb } = require('./db');
 const productsRouter = require('./routes/products');
 const summaryRouter = require('./routes/summary');
+const trendsRouter = require('./routes/trends');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get('/', (_req, res) => {
 
 app.use('/api/products', productsRouter);
 app.use('/api/summary', summaryRouter);
+app.use('/api/trends', trendsRouter);
 
 seed();
 
