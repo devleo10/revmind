@@ -3,6 +3,8 @@ const cors = require('cors');
 const config = require('./config');
 const { seed } = require('../seed');
 const { getDb } = require('./db');
+const productsRouter = require('./routes/products');
+const summaryRouter = require('./routes/summary');
 
 const app = express();
 
@@ -20,6 +22,9 @@ app.get('/health', (_req, res) => {
 app.get('/', (_req, res) => {
   res.json({ status: 'ok', service: 'novabite-api' });
 });
+
+app.use('/api/products', productsRouter);
+app.use('/api/summary', summaryRouter);
 
 seed();
 
