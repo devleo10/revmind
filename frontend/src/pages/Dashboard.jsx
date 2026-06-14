@@ -29,7 +29,7 @@ function Dashboard() {
       } catch {
         if (!cancelled) {
           setError(
-            'Could not load dashboard data. Make sure the backend is running on port 3001.',
+            'Could not load dashboard data. Make sure the backend is running (npm run dev:backend).',
           );
         }
       } finally {

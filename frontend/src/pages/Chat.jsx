@@ -39,7 +39,7 @@ function Chat() {
       const message =
         err instanceof ApiError
           ? err.message
-          : 'Something went wrong. Is the API running on port 3001?';
+          : 'Something went wrong. Is the backend running (npm run dev:backend)?';
       setError(message);
     } finally {
       setLoading(false);

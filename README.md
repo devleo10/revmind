@@ -10,39 +10,51 @@ Conversational BI chatbot for NovaBite Consumer Goods sales data.
 
 ## Run locally
 
-1. Clone the repo and install backend dependencies:
+1. Clone the repo and install dependencies:
 
 ```bash
-cd backend
-npm install
+npm run install:all
+# or: cd backend && npm install && cd ../frontend && npm install
 ```
 
 2. Copy env template and add your OpenAI key:
 
 ```bash
-cp ../.env.example ../.env
-# Edit ../.env and set OPENAI_API_KEY=sk-...
+cp .env.example .env
+# Edit .env and set OPENAI_API_KEY=sk-...
 ```
 
 3. Start the API (seeds SQLite from `data/novabite_sales_data.csv` on first run):
 
 ```bash
-npm run dev
+npm run dev:backend
+# or: cd backend && npm run dev
 ```
 
-4. Verify health:
+4. In a second terminal, start the frontend (proxies `/api` to the backend):
+
+```bash
+npm run dev:frontend
+# or: cd frontend && npm run dev
+```
+
+5. Open **http://localhost:5173** — Dashboard KPIs and the revenue chart load from `/api/summary` and `/api/trends`; use **Chat** to ask sales questions via `/api/chat`.
+
+6. Verify the API directly (optional):
 
 ```bash
 curl http://localhost:3001/health
 ```
 
-5. Ask a question:
+7. Ask a question:
 
 ```bash
 curl -s -X POST http://localhost:3001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"question":"Which region had the highest net revenue in Q1 2024?"}'
 ```
+
+**Env notes:** `VITE_API_URL` is optional. Leave it unset during local dev so the Vite proxy forwards `/api` to `http://localhost:3001` (no CORS setup needed). Set it when the frontend must call the API directly (e.g. a production build).
 
 ## LLM choice
 

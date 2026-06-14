@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+// Empty default uses the Vite dev proxy (/api → localhost:3001). Set VITE_API_URL to call the API directly.
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 class ApiError extends Error {
   constructor(message, statusCode) {
