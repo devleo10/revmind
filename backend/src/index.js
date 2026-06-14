@@ -6,6 +6,7 @@ const { getDb } = require('./db');
 const productsRouter = require('./routes/products');
 const summaryRouter = require('./routes/summary');
 const trendsRouter = require('./routes/trends');
+const chatRouter = require('./routes/chat');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const { sendSuccess } = require('./utils/apiResponse');
@@ -34,6 +35,7 @@ app.get('/', (_req, res) => {
 app.use('/api/products', productsRouter);
 app.use('/api/summary', summaryRouter);
 app.use('/api/trends', trendsRouter);
+app.use('/api/chat', chatRouter);
 
 app.use(notFound);
 app.use(errorHandler);
