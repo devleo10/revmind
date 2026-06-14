@@ -6,10 +6,17 @@ const { getDb } = require('./db');
 const productsRouter = require('./routes/products');
 const summaryRouter = require('./routes/summary');
 const trendsRouter = require('./routes/trends');
+const notFound = require('./middleware/notFound');
+const errorHandler = require('./middleware/errorHandler');
+const { sendSuccess } = require('./utils/apiResponse');
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: config.corsOrigins,
+  }),
+);
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
@@ -17,16 +24,19 @@ app.get('/health', (_req, res) => {
     .prepare('SELECT COUNT(*) AS count FROM transactions')
     .get().count;
 
-  res.json({ status: 'ok', transactions: rowCount });
+  sendSuccess(res, { status: 'ok', transactions: rowCount });
 });
 
 app.get('/', (_req, res) => {
-  res.json({ status: 'ok', service: 'novabite-api' });
+  sendSuccess(res, { status: 'ok', service: 'novabite-api' });
 });
 
 app.use('/api/products', productsRouter);
 app.use('/api/summary', summaryRouter);
 app.use('/api/trends', trendsRouter);
+
+app.use(notFound);
+app.use(errorHandler);
 
 seed();
 
