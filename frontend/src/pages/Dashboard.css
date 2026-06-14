@@ -1,0 +1,135 @@
+.dashboard__header {
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-state {
+  padding: 2rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.875rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.dashboard-state--error {
+  border-style: solid;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dashboard-state--error {
+    color: #fca5a5;
+    background: #450a0a;
+  }
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--surface);
+}
+
+.kpi-card__label {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.kpi-card__value {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.highlight-card {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--surface);
+}
+
+.highlight-card__label {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.highlight-card__title {
+  margin: 0 0 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.highlight-card__meta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.trends-card {
+  padding: 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--surface);
+}
+
+.trends-card__title {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.trends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.trend-row__month {
+  color: var(--text-muted);
+}
+
+.trend-row__bar-wrap {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+
+.trend-row__bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.trend-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
