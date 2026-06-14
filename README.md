@@ -1,52 +1,111 @@
 # RevMind AI — NovaBite Sales Insights
 
-Conversational BI chatbot for NovaBite Consumer Goods sales data.
+Conversational BI chatbot for NovaBite Consumer Goods sales data. A React dashboard plus Express API backed by SQLite, with natural-language Q&A powered by OpenAI.
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend | Node.js 18+, Express 5, better-sqlite3 |
+| Frontend | React 18, Vite, React Router |
+| Data | `data/novabite_sales_data.csv` → SQLite (`data/novabite.db`) |
+| LLM | OpenAI `gpt-4o-mini` |
 
 ## Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- OpenAI API key
+- **Node.js 18+** (`node -v`)
+- **npm**
+- **OpenAI API key** ([platform.openai.com](https://platform.openai.com/api-keys))
 
-## Run locally
+## Run locally (step by step)
 
-1. Clone the repo and install dependencies:
+### 1. Clone and install dependencies
 
 ```bash
+git clone <your-repo-url>
+cd revmind-assignment
 npm run install:all
-# or: cd backend && npm install && cd ../frontend && npm install
 ```
 
-2. Copy env template and add your OpenAI key:
+This installs packages in both `backend/` and `frontend/`. Alternatively:
+
+```bash
+cd backend && npm install
+cd ../frontend && npm install
+```
+
+### 2. Configure environment
+
+Copy the env template at the **repo root** (the backend reads `../../.env` relative to its config):
 
 ```bash
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY=sk-...
 ```
 
-3. Start the API (seeds SQLite from `data/novabite_sales_data.csv` on first run):
+Edit `.env` and set your key:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+Other variables are optional for local dev:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `3001` | Backend listen port |
+| `DATABASE_PATH` | `data/novabite.db` (repo root) | Leave unset unless you need a custom path |
+| `CORS_ORIGINS` | localhost dev origins | Only needed for non-proxy setups |
+| `VITE_API_URL` | *(unset)* | Leave unset so Vite proxies `/api` → `:3001` |
+
+**Do not commit `.env`** — only `.env.example` belongs in git.
+
+### 3. Start the backend
+
+From the repo root:
 
 ```bash
 npm run dev:backend
-# or: cd backend && npm run dev
 ```
 
-4. In a second terminal, start the frontend (proxies `/api` to the backend):
+Or from `backend/`:
 
 ```bash
-npm run dev:frontend
-# or: cd frontend && npm run dev
+npm run dev
 ```
 
-5. Open **http://localhost:5173** — Dashboard KPIs and the revenue chart load from `/api/summary` and `/api/trends`; use **Chat** to ask sales questions via `/api/chat`.
+On first startup the server seeds SQLite from `data/novabite_sales_data.csv` (1,000 rows). You should see:
 
-6. Verify the API directly (optional):
+```
+Server listening on http://localhost:3001
+```
+
+Verify the API:
 
 ```bash
 curl http://localhost:3001/health
+# → {"data":{"status":"ok","transactions":1000}}
 ```
 
-7. Ask a question:
+### 4. Start the frontend (second terminal)
+
+From the repo root:
+
+```bash
+npm run dev:frontend
+```
+
+Or from `frontend/`:
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:5173**.
+
+- **Dashboard** — KPI cards and monthly revenue chart (`/api/summary`, `/api/trends`)
+- **Chat** — ask sales questions via `/api/chat` (loading dots while waiting)
+
+### 5. Test chat from the command line (optional)
 
 ```bash
 curl -s -X POST http://localhost:3001/api/chat \
@@ -54,57 +113,113 @@ curl -s -X POST http://localhost:3001/api/chat \
   -d '{"question":"Which region had the highest net revenue in Q1 2024?"}'
 ```
 
-**Env notes:** `VITE_API_URL` is optional. Leave it unset during local dev so the Vite proxy forwards `/api` to `http://localhost:3001` (no CORS setup needed). Set it when the frontend must call the API directly (e.g. a production build).
+Expected shape: `{ "answer": "..." }`.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `OPENAI_API_KEY is not configured` | Set the key in root `.env` and restart the backend |
+| Frontend can't reach API | Ensure backend is on `:3001`; leave `VITE_API_URL` unset during dev |
+| `transactions: 0` on `/health` | Delete `data/novabite.db` and restart to re-seed |
+| Port already in use | Change `PORT` in `.env` and update the Vite proxy target in `frontend/vite.config.js` |
+
+---
 
 ## LLM choice
 
-**OpenAI (`gpt-4o-mini`)** — fast, inexpensive, and strong at following structured instructions when given precomputed numbers. The assignment dataset is small and question types are predictable, so a lightweight model with tight prompts is sufficient.
+**OpenAI `gpt-4o-mini`**
 
-## `/api/chat` data strategy
+| Reason | Detail |
+|---|---|
+| Cost & latency | Cheapest/fastest GPT-4-class model; chat is not streaming so response time matters |
+| Structured grounding | Strong at following system instructions when numbers are precomputed in JSON |
+| Dataset fit | 1,000 rows, ~5 predictable question types — no need for a larger model or tool-calling loop |
+| Determinism | `temperature: 0` gives stable, reproducible answers for demo/testing |
 
-Hybrid of **Option A** (keyword-driven SQL) and **Option B** (precomputed aggregates):
+Anthropic Claude would work equally well; OpenAI was chosen for familiar SDK ergonomics and free-tier credits.
 
-1. Parse the user question for entities: quarter, year, region, category, channel, sales rep, margin, product ranking, comparisons.
-2. Run targeted SQLite aggregate queries via `backend/src/queries/chatContext.js`.
-3. Always include global summary KPIs as baseline context.
-4. If no keywords match, fall back to a broad reference bundle (regions, categories, channels, reps, top products).
+---
 
-We did **not** use tool/function calling (Option C) — unnecessary for this dataset size and adds latency/complexity.
+## `/api/chat` — data strategy
 
-## Prompt structure
+Hybrid of **precomputed SQL aggregates** (not raw rows) plus **keyword-driven context selection**:
 
-Three parts are sent to OpenAI on every request:
+```
+User question
+    → analyzeQuestion()     (regex/keyword entity detection)
+    → buildChatContext()    (targeted SQLite aggregates)
+    → buildUserPrompt()     (JSON context + question)
+    → OpenAI chat completion
+    → { "answer": "..." }
+```
 
-### 1. System message (role + answer rules)
+Implementation: `backend/src/queries/chatContext.js` (context) and `backend/src/services/chat.js` (LLM call).
 
-- Role: RevMind AI sales insights assistant for NovaBite.
-- Constraint: answer **only** from provided JSON context; never invent metrics.
-- Format rules: concise, lead with the answer, USD to 2 decimals, margin % formula documented.
+### Entity detection
 
-Defined in `backend/src/services/chat.js` as `SYSTEM_PROMPT`.
+`analyzeQuestion()` extracts:
 
-### 2. User message — data context (precomputed SQL)
+- Quarter (`Q1 2024` → `Q1-2024`), year (`2024` / `2025`)
+- Regions, categories, channels (word-boundary regex)
+- Intent flags: reps, margin, products, region ranking, channel comparison
 
-JSON blob built by `buildChatContext(question)`, e.g.:
+### Context slices (included only when relevant)
+
+| Context key | SQL source | Triggered by |
+|---|---|---|
+| `global_summary` | Always | Baseline KPIs from `/api/summary` logic |
+| `revenue_by_region` | `GROUP BY region` | Region/revenue/quarter keywords |
+| `category_metrics` | `GROUP BY category` + margin % | Margin or category mention |
+| `units_by_sales_rep` | `GROUP BY sales_rep` | Rep / "most units" phrasing |
+| `revenue_by_channel` | `GROUP BY channel` | Channel or comparison keywords |
+| `top_products` | `GROUP BY sku` | Product keywords or single region |
+
+If no keywords match, a **fallback bundle** (all regions, categories, channels, reps, top 5 products) is sent so the model still has enough data.
+
+We did **not** use LLM tool/function calling — unnecessary for this dataset size and adds latency, cost, and SQL-injection surface.
+
+---
+
+## `/api/chat` — prompt design
+
+Every request sends two messages to OpenAI:
+
+### 1. System message (`SYSTEM_PROMPT`)
+
+Defined in `backend/src/services/chat.js`:
+
+- Role: RevMind AI sales insights assistant for NovaBite
+- Hard constraint: answer **only** from the JSON context; never invent metrics
+- Format rules: concise (2–4 sentences), lead with the answer, USD to 2 decimals, margin % = `(gross_profit / net_revenue) × 100`
+- Fallback: say data is insufficient if context doesn't cover the question
+
+### 2. User message (`buildUserPrompt`)
+
+Single user turn containing:
+
+1. **Data context** — pretty-printed JSON from `buildChatContext(question)`
+2. **Question** — the raw manager question
+
+Example context shape:
 
 ```json
 {
-  "global_summary": { "total_net_revenue": ..., "top_region": ... },
-  "revenue_by_region": [{ "region": "South", "net_revenue": 37640.11, ... }],
-  "category_metrics": [{ "category": "Snacks", "gross_profit_margin_pct": 52.04, ... }],
-  "units_by_sales_rep": [{ "sales_rep": "Rohan Gupta", "units": 14826, ... }],
-  "revenue_by_channel": [{ "channel": "E-Commerce", "net_revenue": 360607.55, ... }],
-  "top_products": [{ "product_name": "NovaBite Shampoo Coconut 400ml", ... }]
+  "global_summary": { "total_net_revenue": 1234567.89, "top_region": "South", "..." : "..." },
+  "revenue_by_region": [{ "region": "South", "net_revenue": 37640.11, "units": 1234, "gross_profit": 8901.23 }],
+  "category_metrics": [{ "category": "Snacks", "gross_profit_margin_pct": 52.04, "..." : "..." }]
 }
 ```
 
-Only slices relevant to the question are included (plus global summary).
+Only slices relevant to the question are included (plus `global_summary`).
 
-### 3. User message — question
+### Model settings
 
-The raw manager question appended after the context block.
+```js
+{ model: 'gpt-4o-mini', temperature: 0 }
+```
 
-**Model settings:** `gpt-4o-mini`, `temperature: 0` (deterministic, grounded answers).
+---
 
 ## Required chat questions (verified against SQL)
 
@@ -116,24 +231,59 @@ The raw manager question appended after the context block.
 | Compare E-Commerce vs Modern Trade net revenue. | **E-Commerce** $360,607.55 vs Modern Trade $334,635.29 |
 | What was the best performing product in the West region? | **NovaBite Shampoo Coconut 400ml** (NB-SHMP-001) — $44,129.81 |
 
-Test each with:
-
 ```bash
 curl -s -X POST http://localhost:3001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"question":"<question here>"}' | jq .
 ```
 
+---
+
 ## Tradeoffs / shortcuts
 
-- Keyword parsing instead of an LLM router or function-calling loop — simpler and cheaper, but brittle on unusual phrasing.
-- Pre-aggregated context only; no ad-hoc SQL generation by the model (avoids hallucination and injection risk).
-- Chat returns `{ "answer": "..." }` at the top level (per assignment); other endpoints use `{ "data": ... }`.
+Honest list of deliberate compromises:
+
+- **Keyword parsing, not an LLM router** — `analyzeQuestion()` uses regex/keyword heuristics. Fast and free, but brittle on unusual phrasing (e.g. "Southwest" won't map to a region).
+- **Pre-aggregated context only** — the model never writes SQL. Eliminates hallucinated numbers and injection risk, but can't answer arbitrary ad-hoc queries outside the prepared slices.
+- **No tool/function-calling loop** — one LLM call per question. Simpler and cheaper; can't self-correct if the wrong context slice was selected.
+- **Inconsistent API response shapes** — `/api/chat` returns `{ "answer": "..." }` (per assignment spec); other routes wrap payloads in `{ "data": ... }`.
+- **No automated tests** — accuracy was verified manually against the five required questions and `/health` row count.
+- **No Docker / docker-compose** — two-terminal local setup only.
+- **Chat history is client-side only** — messages live in React state; refreshing the page clears the thread; nothing is persisted server-side.
+- **Single-process SQLite** — fine for a take-home; would need Postgres + connection pooling for production concurrency.
+
+---
 
 ## What I'd improve with more time
 
-- Frontend chat UI with loading state and conversation history.
-- Streaming SSE responses for typewriter effect.
-- Unit tests for `analyzeQuestion` and `buildChatContext`.
-- Smarter entity extraction (embeddings or a lightweight classifier) for edge-case phrasing.
-- Response caching for repeated questions.
+- **Unit/integration tests** for `analyzeQuestion`, `buildChatContext`, and the five required chat answers (regression guard).
+- **Streaming SSE** from the LLM with a typewriter effect in the chat UI.
+- **Smarter entity extraction** — lightweight classifier or embeddings instead of regex, to handle paraphrased questions.
+- **Response caching** — hash `(question + context)` to skip duplicate OpenAI calls.
+- **Persistent chat sessions** — store threads in SQLite or localStorage with export.
+- **Second dashboard chart** — revenue breakdown by category or region.
+- **docker-compose.yml** — one-command spin-up for reviewers.
+- **Rate limiting & API key validation** on `/api/chat` before hitting OpenAI.
+- **Unified error envelope** across all endpoints (`{ error: { code, message } }`).
+- **Production build docs** — `npm run build` in frontend with `VITE_API_URL` pointing at a deployed API.
+
+---
+
+## Project layout
+
+```
+├── backend/
+│   ├── seed.js                 # CSV → SQLite loader
+│   └── src/
+│       ├── index.js            # Express app entry
+│       ├── queries/            # SQL for summary, trends, chat context
+│       ├── routes/             # /api/products, summary, trends, chat
+│       └── services/chat.js    # OpenAI integration
+├── frontend/
+│   └── src/pages/              # Dashboard, Chat
+├── data/
+│   ├── novabite_sales_data.csv
+│   └── novabite.db             # generated on first run (gitignored)
+├── .env.example
+└── README.md
+```
