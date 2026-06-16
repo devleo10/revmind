@@ -1,5 +1,7 @@
 # RevMind AI — NovaBite Sales Insights
 
+**Repository:** [github.com/devleo10/revmind](https://github.com/devleo10/revmind)
+
 Conversational BI chatbot for NovaBite Consumer Goods sales data. A React dashboard plus Express API backed by SQLite, with natural-language Q&A powered by OpenAI.
 
 ## Tech stack
@@ -22,8 +24,8 @@ Conversational BI chatbot for NovaBite Consumer Goods sales data. A React dashbo
 ### 1. Clone and install dependencies
 
 ```bash
-git clone <your-repo-url>
-cd revmind-assignment
+git clone https://github.com/devleo10/revmind.git
+cd revmind
 npm run install:all
 ```
 
@@ -36,7 +38,7 @@ cd ../frontend && npm install
 
 ### 2. Configure environment
 
-Copy the env template at the **repo root** (the backend reads `../../.env` relative to its config):
+Copy the env template to the **repo root** (`backend/src/config.js` loads `.env` from there):
 
 ```bash
 cp .env.example .env
@@ -102,7 +104,7 @@ npm run dev
 
 Open **http://localhost:5173**.
 
-- **Dashboard** — KPI cards and monthly revenue chart (`/api/summary`, `/api/trends`)
+- **Dashboard** — KPI cards (revenue, margin %, top region), monthly revenue chart, and category breakdown chart (`/api/summary`, `/api/trends`, `/api/categories`)
 - **Chat** — ask sales questions via `/api/chat` (loading dots while waiting)
 
 ### 5. Test chat from the command line (optional)
@@ -114,6 +116,16 @@ curl -s -X POST http://localhost:3001/api/chat \
 ```
 
 Expected shape: `{ "answer": "..." }`.
+
+### 6. Production build (optional)
+
+```bash
+cd frontend
+VITE_API_URL=http://localhost:3001 npm run build
+npm run preview
+```
+
+Set `VITE_API_URL` to your deployed API URL when the frontend and backend are not on the same host.
 
 ### Troubleshooting
 
@@ -247,25 +259,52 @@ Honest list of deliberate compromises:
 - **Pre-aggregated context only** — the model never writes SQL. Eliminates hallucinated numbers and injection risk, but can't answer arbitrary ad-hoc queries outside the prepared slices.
 - **No tool/function-calling loop** — one LLM call per question. Simpler and cheaper; can't self-correct if the wrong context slice was selected.
 - **Inconsistent API response shapes** — `/api/chat` returns `{ "answer": "..." }` (per assignment spec); other routes wrap payloads in `{ "data": ... }`.
-- **No automated tests** — accuracy was verified manually against the five required questions and `/health` row count.
 - **No Docker / docker-compose** — two-terminal local setup only.
 - **Chat history is client-side only** — messages live in React state; refreshing the page clears the thread; nothing is persisted server-side.
 - **Single-process SQLite** — fine for a take-home; would need Postgres + connection pooling for production concurrency.
 
 ---
 
+## Tests
+
+Backend unit/integration tests use Node's built-in test runner (no extra test framework):
+
+```bash
+npm test
+```
+
+From `backend/`:
+
+```bash
+npm test
+```
+
+`backend/test/chatContext.test.js` covers:
+
+- `analyzeQuestion()` entity detection for all five assignment chat questions
+- SQL-backed checks for Q1 2024 top region, Snacks margin %, and 2025 top rep
+- `buildChatContext()` slice selection for targeted questions
+
+Tests seed a temporary SQLite file under `/tmp` so your local `data/novabite.db` is untouched.
+
+---
+
+## Bonus features
+
+- **Second dashboard chart** — `GET /api/categories` + “Net revenue by category” bar chart alongside monthly trends
+- **Backend tests** — see [Tests](#tests) above
+
+---
+
 ## What I'd improve with more time
 
-- **Unit/integration tests** for `analyzeQuestion`, `buildChatContext`, and the five required chat answers (regression guard).
 - **Streaming SSE** from the LLM with a typewriter effect in the chat UI.
 - **Smarter entity extraction** — lightweight classifier or embeddings instead of regex, to handle paraphrased questions.
 - **Response caching** — hash `(question + context)` to skip duplicate OpenAI calls.
 - **Persistent chat sessions** — store threads in SQLite or localStorage with export.
-- **Second dashboard chart** — revenue breakdown by category or region.
 - **docker-compose.yml** — one-command spin-up for reviewers.
 - **Rate limiting & API key validation** on `/api/chat` before hitting OpenAI.
 - **Unified error envelope** across all endpoints (`{ error: { code, message } }`).
-- **Production build docs** — `npm run build` in frontend with `VITE_API_URL` pointing at a deployed API.
 
 ---
 
@@ -274,10 +313,11 @@ Honest list of deliberate compromises:
 ```
 ├── backend/
 │   ├── seed.js                 # CSV → SQLite loader
+│   ├── test/                   # node:test unit/integration tests
 │   └── src/
 │       ├── index.js            # Express app entry
-│       ├── queries/            # SQL for summary, trends, chat context
-│       ├── routes/             # /api/products, summary, trends, chat
+│       ├── queries/            # SQL for summary, trends, categories, chat context
+│       ├── routes/             # /api/products, summary, trends, categories, chat
 │       └── services/chat.js    # OpenAI integration
 ├── frontend/
 │   └── src/pages/              # Dashboard, Chat

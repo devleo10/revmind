@@ -10,6 +10,11 @@ export async function fetchTrends() {
   return response.data.trends;
 }
 
+export async function fetchCategoryBreakdown() {
+  const response = await api.get('/api/categories');
+  return response.data.categories;
+}
+
 export async function askQuestion(question) {
   const response = await api.post('/api/chat', { question });
   return response.answer;

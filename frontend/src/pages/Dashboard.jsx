@@ -1,11 +1,23 @@
 import { useEffect, useState } from 'react';
-import { fetchSummary, fetchTrends } from '../api/sales';
+import {
+  fetchCategoryBreakdown,
+  fetchSummary,
+  fetchTrends,
+} from '../api/sales';
 import { formatCurrency, formatNumber, formatPercent } from '../utils/format';
 import './Dashboard.css';
+
+const CATEGORY_BAR_COLORS = [
+  'linear-gradient(90deg, #7c3aed, #c4b5fd)',
+  'linear-gradient(90deg, #2563eb, #93c5fd)',
+  'linear-gradient(90deg, #059669, #6ee7b7)',
+  'linear-gradient(90deg, #d97706, #fcd34d)',
+];
 
 function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [trends, setTrends] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -17,14 +29,16 @@ function Dashboard() {
       setError(null);
 
       try {
-        const [summaryData, trendsData] = await Promise.all([
+        const [summaryData, trendsData, categoryData] = await Promise.all([
           fetchSummary(),
           fetchTrends(),
+          fetchCategoryBreakdown(),
         ]);
 
         if (!cancelled) {
           setSummary(summaryData);
           setTrends(trendsData);
+          setCategories(categoryData);
         }
       } catch {
         if (!cancelled) {
@@ -69,6 +83,10 @@ function Dashboard() {
   }
 
   const maxRevenue = Math.max(...trends.map((row) => row.net_revenue), 1);
+  const maxCategoryRevenue = Math.max(
+    ...categories.map((row) => row.net_revenue),
+    1,
+  );
 
   return (
     <section className="dashboard">
@@ -87,26 +105,27 @@ function Dashboard() {
           </p>
         </article>
         <article className="kpi-card glass-card">
-          <p className="kpi-card__label">Units sold</p>
-          <p className="kpi-card__value">
-            {formatNumber(summary.total_units)}
-          </p>
-        </article>
-        <article className="kpi-card glass-card">
           <p className="kpi-card__label">Gross profit margin</p>
           <p className="kpi-card__value">
             {formatPercent(summary.gross_profit_margin_pct)}
+          </p>
+        </article>
+        <article className="kpi-card glass-card">
+          <p className="kpi-card__label">Top region</p>
+          <p className="kpi-card__value">{summary.top_region.name}</p>
+          <p className="kpi-card__meta">
+            {formatCurrency(summary.top_region.net_revenue)} net revenue
           </p>
         </article>
       </div>
 
       <div className="highlight-grid">
         <article className="highlight-card glass-card">
-          <p className="highlight-card__label">Top region</p>
-          <p className="highlight-card__title">{summary.top_region.name}</p>
-          <p className="highlight-card__meta">
-            {formatCurrency(summary.top_region.net_revenue)} net revenue
+          <p className="highlight-card__label">Units sold</p>
+          <p className="highlight-card__title">
+            {formatNumber(summary.total_units)}
           </p>
+          <p className="highlight-card__meta">Across all transactions</p>
         </article>
         <article className="highlight-card glass-card">
           <p className="highlight-card__label">Top channel</p>
@@ -127,29 +146,57 @@ function Dashboard() {
         </article>
       </div>
 
-      {trends.length > 0 ? (
-        <article className="trends-card glass-card">
-          <h2 className="trends-card__title">Monthly net revenue</h2>
-          <div className="trends-list">
-            {trends.map((row) => (
-              <div key={row.month} className="trend-row">
-                <span className="trend-row__month">{row.month}</span>
-                <div className="trend-row__bar-wrap">
-                  <div
-                    className="trend-row__bar"
-                    style={{
-                      width: `${(row.net_revenue / maxRevenue) * 100}%`,
-                    }}
-                  />
+      <div className="charts-grid">
+        {trends.length > 0 ? (
+          <article className="trends-card glass-card">
+            <h2 className="trends-card__title">Monthly net revenue</h2>
+            <div className="trends-list">
+              {trends.map((row) => (
+                <div key={row.month} className="trend-row">
+                  <span className="trend-row__month">{row.month}</span>
+                  <div className="trend-row__bar-wrap">
+                    <div
+                      className="trend-row__bar"
+                      style={{
+                        width: `${(row.net_revenue / maxRevenue) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="trend-row__value">
+                    {formatCurrency(row.net_revenue)}
+                  </span>
                 </div>
-                <span className="trend-row__value">
-                  {formatCurrency(row.net_revenue)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </article>
-      ) : null}
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {categories.length > 0 ? (
+          <article className="trends-card glass-card">
+            <h2 className="trends-card__title">Net revenue by category</h2>
+            <div className="trends-list">
+              {categories.map((row, index) => (
+                <div key={row.category} className="trend-row trend-row--category">
+                  <span className="trend-row__month">{row.category}</span>
+                  <div className="trend-row__bar-wrap">
+                    <div
+                      className="trend-row__bar"
+                      style={{
+                        width: `${(row.net_revenue / maxCategoryRevenue) * 100}%`,
+                        background:
+                          CATEGORY_BAR_COLORS[index % CATEGORY_BAR_COLORS.length],
+                      }}
+                    />
+                  </div>
+                  <span className="trend-row__value">
+                    {formatCurrency(row.net_revenue)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+      </div>
     </section>
   );
 }
