@@ -159,22 +159,28 @@ Hybrid of **precomputed SQL aggregates** (not raw rows) plus **keyword-driven co
 
 ```
 User question
-    → analyzeQuestion()     (regex/keyword entity detection)
-    → buildChatContext()    (targeted SQLite aggregates)
-    → buildUserPrompt()     (JSON context + question)
-    → OpenAI chat completion
-    → { "answer": "..." }
+    → analyzeQuestion()        (regex/keyword entity detection)
+    → buildChatContext()       (targeted SQLite aggregates + answer_hints)
+    → tryDirectAnswer()        (SQL-verified shortcut for common patterns)
+        → if matched: { "answer": "..." }   (no LLM call)
+        → else:
+            → buildUserPrompt() (JSON context + question)
+            → OpenAI chat completion (with retries + timeout)
+            → { "answer": "..." }
 ```
 
-Implementation: `backend/src/queries/chatContext.js` (context) and `backend/src/services/chat.js` (LLM call).
+Implementation: `backend/src/queries/chatContext.js` (context), `backend/src/services/chatInsights.js` (direct answers), and `backend/src/services/chat.js` (LLM call).
 
 ### Entity detection
 
 `analyzeQuestion()` extracts:
 
-- Quarter (`Q1 2024` → `Q1-2024`), year (`2024` / `2025`)
-- Regions, categories, channels (word-boundary regex)
+- Quarter (`Q1 2024` → `Q1-2024`, `first quarter of 2024` → `Q1-2024`), year (`2024` / `2025`)
+- Regions, categories, channels (word-boundary regex + aliases)
+- Channel aliases: `ecommerce`, `e-commerce`, `dtc`, etc.
+- Category aliases: `snack` → Snacks, etc.
 - Intent flags: reps, margin, products, region ranking, channel comparison
+- Product vs region disambiguation (e.g. “best product in West” is not treated as a region revenue question)
 
 ### Context slices (included only when relevant)
 
@@ -233,6 +239,39 @@ Only slices relevant to the question are included (plus `global_summary`).
 
 ---
 
+## Chat robustness improvements
+
+Post-submission hardening for more reliable answers in demo and production:
+
+### 1. Smarter question parsing
+- Informal channel phrasing (`ecommerce` vs `E-Commerce`, `dtc`, etc.)
+- Category aliases (`snack` → Snacks)
+- Natural quarter phrasing (`first quarter of 2024`)
+- Clearer intent detection so product and region questions do not collide
+
+### 2. SQL-verified direct answers
+For the five assignment-style questions (and similar patterns), the backend:
+1. Precomputes **answer hints** from SQLite (`computeAnswerHints()`)
+2. Returns the answer **directly from SQL** via `tryDirectAnswer()` — no LLM call
+3. Falls back to OpenAI only for open-ended questions
+
+Benefits: accurate numbers, faster responses, lower API cost, no hallucinated metrics on known question types.
+
+### 3. Answer hints for LLM fallback
+When the LLM is used, `answer_hints` are included in the JSON context so the model prefers SQL-verified facts over re-deriving from raw slices.
+
+### 4. Resilient API layer
+- Max question length (500 characters)
+- OpenAI retry on rate limits / 5xx (2 retries with backoff)
+- 30s request timeout with user-friendly error messages
+- Request body validation on `POST /api/chat`
+
+### 5. Chat UI improvements
+- Clearer production error messages (including cold-start hint for Render free tier)
+- **Retry** button on failed questions
+
+---
+
 ## Required chat questions (verified against SQL)
 
 | Question | Expected answer (from DB) |
@@ -255,7 +294,7 @@ curl -s -X POST http://localhost:3001/api/chat \
 
 Honest list of deliberate compromises:
 
-- **Keyword parsing, not an LLM router** — `analyzeQuestion()` uses regex/keyword heuristics. Fast and free, but brittle on unusual phrasing (e.g. "Southwest" won't map to a region).
+- **Keyword parsing, not an LLM router** — `analyzeQuestion()` uses regex/keyword heuristics (with aliases). Fast and free, but still brittle on unusual phrasing (e.g. "Southwest" won't map to a region).
 - **Pre-aggregated context only** — the model never writes SQL. Eliminates hallucinated numbers and injection risk, but can't answer arbitrary ad-hoc queries outside the prepared slices.
 - **No tool/function-calling loop** — one LLM call per question. Simpler and cheaper; can't self-correct if the wrong context slice was selected.
 - **Inconsistent API response shapes** — `/api/chat` returns `{ "answer": "..." }` (per assignment spec); other routes wrap payloads in `{ "data": ... }`.
@@ -282,8 +321,11 @@ npm test
 `backend/test/chatContext.test.js` covers:
 
 - `analyzeQuestion()` entity detection for all five assignment chat questions
+- Alias and informal phrasing detection (e.g. `ecommerce`, `snack`, `first quarter of 2024`)
 - SQL-backed checks for Q1 2024 top region, Snacks margin %, and 2025 top rep
 - `buildChatContext()` slice selection for targeted questions
+- `tryDirectAnswer()` SQL-verified responses for all five assignment questions
+- `computeAnswerHints()` channel comparison values
 
 Tests seed a temporary SQLite file under `/tmp` so your local `data/novabite.db` is untouched.
 
@@ -293,14 +335,16 @@ Tests seed a temporary SQLite file under `/tmp` so your local `data/novabite.db`
 
 - **Second dashboard chart** — `GET /api/categories` + “Net revenue by category” bar chart alongside monthly trends
 - **Backend tests** — see [Tests](#tests) above
+- **Chat robustness** — SQL direct answers, answer hints, alias parsing, API retries — see [Chat robustness improvements](#chat-robustness-improvements)
+- **Production deploy** — backend on Render, frontend on Vercel (`frontend/vercel.json` SPA rewrites for `/dashboard` and `/chat` refresh)
 
 ---
 
 ## What I'd improve with more time
 
 - **Streaming SSE** from the LLM with a typewriter effect in the chat UI.
-- **Smarter entity extraction** — lightweight classifier or embeddings instead of regex, to handle paraphrased questions.
-- **Response caching** — hash `(question + context)` to skip duplicate OpenAI calls.
+- **Smarter entity extraction** — embeddings or a small classifier for paraphrases regex still misses.
+- **Response caching** — hash `(question + context)` to skip duplicate OpenAI calls (direct SQL path already skips LLM for common questions).
 - **Persistent chat sessions** — store threads in SQLite or localStorage with export.
 - **docker-compose.yml** — one-command spin-up for reviewers.
 - **Rate limiting & API key validation** on `/api/chat` before hitting OpenAI.
@@ -318,8 +362,11 @@ Tests seed a temporary SQLite file under `/tmp` so your local `data/novabite.db`
 │       ├── index.js            # Express app entry
 │       ├── queries/            # SQL for summary, trends, categories, chat context
 │       ├── routes/             # /api/products, summary, trends, categories, chat
-│       └── services/chat.js    # OpenAI integration
+│       └── services/
+│           ├── chat.js         # OpenAI integration + retries
+│           └── chatInsights.js # SQL-verified direct answers
 ├── frontend/
+│   ├── vercel.json             # SPA rewrites for client-side routes
 │   └── src/pages/              # Dashboard, Chat
 ├── data/
 │   ├── novabite_sales_data.csv

@@ -16,6 +16,7 @@ function Chat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastFailedQuestion, setLastFailedQuestion] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -23,13 +24,18 @@ function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  async function sendMessage(question) {
+  async function sendMessage(question, { isRetry = false } = {}) {
     const trimmed = question.trim();
     if (!trimmed || loading) return;
 
     setError(null);
+    if (!isRetry) {
+      setLastFailedQuestion(null);
+    }
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    if (!isRetry) {
+      setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    }
     setLoading(true);
 
     try {
@@ -38,9 +44,12 @@ function Chat() {
     } catch (err) {
       const message =
         err instanceof ApiError
-          ? err.message
-          : 'Something went wrong. Is the backend running (npm run dev:backend)?';
+          ? err.statusCode === 503 || err.statusCode === 504
+            ? `${err.message} The server may be waking up — try again.`
+            : err.message
+          : 'Unable to reach the server. Check your connection and try again.';
       setError(message);
+      setLastFailedQuestion(trimmed);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -118,9 +127,19 @@ function Chat() {
         </div>
 
         {error ? (
-          <p className="chat-error" role="alert">
-            {error}
-          </p>
+          <div className="chat-error" role="alert">
+            <p>{error}</p>
+            {lastFailedQuestion ? (
+              <button
+                type="button"
+                className="chat-retry"
+                disabled={loading}
+                onClick={() => sendMessage(lastFailedQuestion, { isRetry: true })}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         <form className="chat-composer" onSubmit={handleSubmit}>

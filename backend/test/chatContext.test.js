@@ -7,10 +7,12 @@ const { closeDb } = require('../src/db');
 const {
   analyzeQuestion,
   buildChatContext,
+  computeAnswerHints,
   getCategoryMetrics,
   getRevenueByRegion,
   getUnitsBySalesRep,
 } = require('../src/queries/chatContext');
+const { tryDirectAnswer } = require('../src/services/chatInsights');
 
 describe('analyzeQuestion', () => {
   it('detects quarter, year, and region intent for Q1 2024 question', () => {
@@ -49,6 +51,30 @@ describe('analyzeQuestion', () => {
     assert.equal(analysis.asksChannelComparison, true);
     assert.ok(analysis.channels.includes('E-Commerce'));
     assert.ok(analysis.channels.includes('Modern Trade'));
+  });
+
+  it('detects channel aliases and informal phrasing', () => {
+    const analysis = analyzeQuestion(
+      'Compare ecommerce versus modern trade revenue',
+    );
+
+    assert.equal(analysis.asksChannelComparison, true);
+    assert.ok(analysis.channels.includes('E-Commerce'));
+    assert.ok(analysis.channels.includes('Modern Trade'));
+  });
+
+  it('detects snack alias and first quarter phrasing', () => {
+    const marginAnalysis = analyzeQuestion(
+      'What margin did snack products make?',
+    );
+    assert.deepEqual(marginAnalysis.categories, ['Snacks']);
+    assert.equal(marginAnalysis.asksAboutMargin, true);
+
+    const quarterAnalysis = analyzeQuestion(
+      'Which region led revenue in the first quarter of 2024?',
+    );
+    assert.equal(quarterAnalysis.quarter, 'Q1-2024');
+    assert.equal(quarterAnalysis.asksAboutRegions, true);
   });
 
   it('detects West region and product intent', () => {
@@ -98,16 +124,63 @@ describe('chat data queries (seeded SQLite)', () => {
     const regionContext = buildChatContext(
       'Which region had the highest net revenue in Q1 2024?',
     );
-    assert.ok(regionContext.revenue_by_region);
-    assert.equal(regionContext.revenue_by_region[0].region, 'South');
+    assert.ok(regionContext.context.revenue_by_region);
+    assert.equal(regionContext.context.revenue_by_region[0].region, 'South');
+    assert.ok(regionContext.context.answer_hints);
 
     const marginContext = buildChatContext(
       'What is the gross profit margin for the Snacks category?',
     );
-    assert.ok(marginContext.category_metrics);
-    const snacks = marginContext.category_metrics.find(
+    assert.ok(marginContext.context.category_metrics);
+    const snacks = marginContext.context.category_metrics.find(
       (row) => row.category === 'Snacks',
     );
     assert.equal(snacks.gross_profit_margin_pct, 52.04);
+  });
+
+  it('returns SQL-verified direct answers for assignment questions', () => {
+    const questions = [
+      {
+        question: 'Which region had the highest net revenue in Q1 2024?',
+        expected: 'South',
+      },
+      {
+        question: 'What is the gross profit margin for the Snacks category?',
+        expected: '52.04%',
+      },
+      {
+        question: 'Which sales rep closed the most units in 2025?',
+        expected: 'Rohan Gupta',
+      },
+      {
+        question: 'Compare E-Commerce vs Modern Trade net revenue.',
+        expected: 'E-Commerce',
+      },
+      {
+        question: 'What was the best performing product in the West region?',
+        expected: 'NovaBite Shampoo Coconut 400ml',
+      },
+    ];
+
+    for (const { question, expected } of questions) {
+      const { analysis, answerHints } = buildChatContext(question);
+      const answer = tryDirectAnswer(analysis, answerHints);
+      assert.ok(answer, `expected direct answer for: ${question}`);
+      assert.match(answer, new RegExp(expected, 'i'));
+    }
+  });
+
+  it('computeAnswerHints returns channel comparison values', () => {
+    const analysis = analyzeQuestion(
+      'Compare E-Commerce vs Modern Trade net revenue.',
+    );
+    const hints = computeAnswerHints(analysis);
+    const comparison = hints.find(
+      (hint) => hint.type === 'channel_net_revenue_comparison',
+    );
+
+    assert.ok(comparison);
+    assert.equal(comparison.channels[0].channel, 'E-Commerce');
+    assert.equal(comparison.channels[0].net_revenue, 360607.55);
   });
 });
